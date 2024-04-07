@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Задача</title>
+<link href="../static/styles.css" th:href="@{/styles.css}" rel="stylesheet" />
+</head>
+<body>
+	<div style="text-align:center">
+
+		<div id="contentdiv" >
+				<div id="headerdiv">
+		</div>
+		<div style="margin: 40px;">
+	<a th:href="@{/tasks/0}">Задачи</a><br>
+	<a th:href="@{/people/0}">Пользователи</a><br>
+
+
+</div>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/registration}"><h3>Регистрация</h3></a>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/login}"><h3>Войти</h3></a>
+<span th:unless="${error}==null" th:text="${error}"></span>
+<a sec:authorize="isAuthenticated()" th:href="@{/tasks/add}"><h3>Создать</h3></a>
+<div th:object="${task}">
+		<!--<input type="hidden" id="id" th:name="id" name="id" th:value="${task.id}"/>-->
+	Название: <span th:text="${task.title}"/><br>
+	Описание: <span th:text="${task.description}"/><br><br>
+	Статус: <span th:text="${task.status.translation}"/><br>
+	Приоритет: <span th:text="${task.priority.translation}"/><br>
+	Создатель: <a th:href="@{/people/view/{id}/created-tasks/0(id=${task.author?.id})}" th:text="${task.author?.name}"/><br>
+	Исполнитель: <a th:href="@{/people/view/{id}/executable-tasks/0(id=${task.executor?.id})}" th:text="${task.executor?.name}"/><br>
+		Создана: <span th:text="${#temporals.format(task.createdAt, 'dd-MM-yyyy HH:mm')}"/><br>
+	Изменена: <span th:text="${#temporals.format(task.editedAt, 'dd-MM-yyyy HH:mm')}"/><br>
+	<a sec:authorize="isAuthenticated()" th:unless="${personId}==0" th:if="${personId}==${task.author?.id}" th:href="@{/tasks/edit/{id}(id=${task.id})}" th:text="'Изменить'"/>
+	<a sec:authorize="isAuthenticated()" th:unless="${personId}==0" th:if="${personId}==${task.executor?.id}" th:href="@{/tasks/change-status/{id}(id=${task.id})}" th:text="'Изменить статус'"/><br><br><br><br>
+	<form sec:authorize="isAuthenticated()" th:method="POST" th:object="${comment}" th:action="@{/tasks/comment}"> <!--TODO-->
+		<div th:if="${#fields.hasAnyErrors()}">
+    <ul>
+        <li th:each="err : ${#fields.allErrors()}" th:text="${err}" />
+    </ul>
+</div>
+		<input type="text" th:field="*{body}"/>
+		<input type="hidden" name="taskId" id="taskId" th:value="${task.id}"/><br>
+		
+		<input type="submit" value="Комментировать"/>
+		</form><br><br>
+		<h3>Комментарии:</h3>
+		<div th:each="comment : ${comments}">
+			<b><a th:href="@{/people/view/{id}/comments/0(id=${comment.author.id})}" th:text="${comment?.author?.name}"/></b>   <span th:text="${#temporals.format(comment.createdAt, 'dd-MM-yyyy HH:mm')}"/><br>
+		<span th:text="${comment.body}"></span><br>
+		<a th:if="${personId}==${comment.author?.id}" th:href="@{/tasks/comment/edit/{id}(id=${comment.id})}" th:text="'Редактировать'"/><br><br><br>
+	</div>
+	<div th:unless="${comments.getTotalPages()}==0">
+		<a th:unless="${currentPage}==0" th:href="@{/tasks/view/{id}/0(id=${task.id})}" th:text="'Первая'"/>
+<a th:unless="${currentPage}==0" th:href="@{/tasks/view/{id}/{page}(id=${task.id}, page=${currentPage}-1)}" th:text="'Предыдущая'"/>
+<span th:text="${currentPage}+1"/>
+<a th:unless="${currentPage}==${comments.getTotalPages()-1}" th:href="@{/tasks/view/{id}/{page}(id=${task.id}, page=${currentPage}+1)}" th:text="'Следующая'"/>
+<a th:unless="${currentPage}==${comments.getTotalPages()-1}" th:href="@{/tasks/view/{id}/{page}(id=${task.id}, page=${comments.getTotalPages()}-1)}" th:text="'Последняя'"/>
+</div>
+		</div>
+		<div id="prefooter"></div>
+		</div><!-- Закрытие div контент -->
+<div id="footerdiv">Это подвал</div>
+</div>
+</body>
+</html>

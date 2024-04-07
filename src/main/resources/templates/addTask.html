@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Создание задачи</title>
+</head>
+<body>
+	<center>
+
+		<div id="contentdiv" >
+				<div id="headerdiv">
+		</div>
+		<div style="margin: 40px;">
+	<a th:href="@{/tasks/0}">Задачи</a><br>
+	<a th:href="@{/people/0}">Пользователи</a><br>
+
+
+</div>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/registration}"><h3>Регистрация</h3></a>
+<form th:method="POST" th:action="@{/tasks/add}" th:object="${task}">
+	
+	<div th:if="${#fields.hasAnyErrors()}">
+    <ul>
+        <li th:each="err : ${#fields.allErrors()}" th:text="${err}" />
+    </ul>
+</div>
+	
+	<p>Название: <input type="text" th:field="*{title}"/></p>
+	<p>Описание: <input type="text" th:field="*{description}"/></p>
+	<p>Статус: <select th:field="*{status}">
+    						<option th:each="statusT : ${T(ru.terentyev.EffectiveMobile.entities.Task.Status).values()}"
+        						th:value="${statusT}" th:text="${statusT?.translation}"></option>
+						</select><br></p>
+	<p>Приоритет: <select th:field="*{priority}">
+    						<option th:each="priorityT : ${T(ru.terentyev.EffectiveMobile.entities.Task.Priority).values()}"
+        						th:value="${priorityT}" th:text="${priorityT?.translation}"></option>
+						</select><br></p>
+	<p>Исполнитель: <select th:field="*{executorId}">
+    						<option th:each="executorName : ${executors}"
+        						th:value="${executorName.id}" th:text="${executorName.name}"></option>
+						</select><br></p>
+						
+	
+		<input type="submit" value="Добавить"/>
+	</form> 
+			</div>
+		<div id="prefooter"></div>
+		</div><!-- Закрытие div контент -->
+<div id="footerdiv">Это подвал</div>
+</center>
+</body>
+</html>

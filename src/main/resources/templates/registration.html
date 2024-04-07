@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="https://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Регистрация</title>
+<link href="../static/styles.css" th:href="@{/styles.css}" rel="stylesheet" />
+  
+</head>
+<body>
+	
+		<a th:href="@{/tasks/0}">Задачи</a><br>
+	<a th:href="@{/people/0}">Пользователи</a><br>
+<form th:action="@{/auth/registration}" th:object="${registrationForm}" method="POST" enctype="utf8">
+    <div>
+        <label>Логин</label>
+        <input th:field="*{name}"/>
+        <p th:each="error: ${#fields.errors('name')}" 
+          th:text="${error}">Validation error</p>
+    </div>
+   <div>
+        <label>Email</label>
+        <input th:field="*{email}"/>
+        <p th:each="error: ${#fields.errors('email')}" 
+          th:text="${error}">Validation error</p>
+    </div>
+    <div>
+        <label>Пароль</label>
+        <input type="password" th:field="*{password}"/>
+        <p th:each="error : ${#fields.errors('password')}" 
+          th:text="${error}">Validation error</p>
+    </div>
+    <div>
+        <label text="Подтверждение пароля">Подтверждение пароля</label>
+        <input type="password" th:field="*{passwordConfirm}"/>
+        
+    </div>
+    <button type="submit" th:text="Готово">submit</button>
+</form>
+
+<a th:href="@{/}">На главную</a>
+
+</body>
+</html>

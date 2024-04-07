@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Задачи</title>
+<link href="../static/styles.css" th:href="@{/styles.css}" rel="stylesheet" />
+</head>
+<body>
+	<center>
+
+		<div id="contentdiv" >
+				<div id="headerdiv">
+		</div>
+		<div style="margin: 40px;">
+	<a th:href="@{/tasks/0}">Задачи</a><br>
+<a th:href="@{/people/0}">Пользователи</a><br>
+
+</div>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/registration}"><h3>Регистрация</h3></a>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/login}"><h3>Войти</h3></a>
+<span th:unless="${error}==null" th:text="${error}"></span>
+<div th:object="${person}">
+		<!--<input type="hidden" id="id" th:name="id" name="id" th:value="${task.id}"/>-->
+	<h3><a th:href="@{/people/view/{id}(id=${person.id})}" th:text="${person.name}"/></h3><br>
+	<a th:href="@{/people/view/{id}/created-tasks/0(id=${person.id})}" th:text="'Созданные задачи'"/><br>
+	<a th:href="@{/people/view/{id}/executable-tasks/0(id=${person.id})}" th:text="'Исполняемые задачи'"/><br>
+	<a th:href="@{/people/view/{id}/comments/0(id=${person.id})}" th:text="'Комментарии'"/><br>
+		</div>
+		<div id="prefooter"></div>
+		</div><!-- Закрытие div контент -->
+<div id="footerdiv">Это подвал</div>
+</center>
+</body>
+</html>

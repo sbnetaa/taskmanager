@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Изменение задачи</title>
+<link href="../static/styles.css" th:href="@{/styles.css}" rel="stylesheet" />
+</head>
+<body>
+	<center>
+
+		<div id="contentdiv" >
+				<div id="headerdiv">
+		</div>
+		<div style="margin: 40px;">
+	<a th:href="@{/tasks/0}">Задачи</a><br>
+	<a th:href="@{/people/0}">Пользователи</a><br>
+
+
+</div>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/registration}"><h3>Регистрация</h3></a>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/login}"><h3>Войти</h3></a>
+<span th:unless="${error}==null" th:text="${error}"></span>
+
+<div th:object="${comment}">
+<h3>Редактирование комментария к задаче <span th:text="${comment.task.id}"/></h3><br><br>
+		<!--<input type="hidden" id="id" th:name="id" name="id" th:value="${task.id}"/>-->
+	Название: <span th:text="${comment.task.title}"/><br>
+	Описание: <span th:text="${comment.task.description}"/><br><br>
+	Статус: <span th:text="${comment.task.status.translation}"/><br>
+	Приоритет: <span th:text="${comment.task.priority.translation}"/><br>
+	Создатель: <a th:href="@{/people/view/{id}/created-tasks/0(id=${comment.task.author?.id})}" th:text="${comment.task.author?.name}"/><br>
+	Исполнитель: <a th:href="@{/people/view/{id}/executable-tasks/0(id=${comment.task.executor?.id})}" th:text="${comment.task.executor?.name}"/><br>
+		Создана: <span th:text="${#temporals.format(comment.task.createdAt, 'dd-MM-yyyy HH:mm')}"/><br>
+	Изменена: <span th:text="${#temporals.format(comment.task.editedAt, 'dd-MM-yyyy HH:mm')}"/><br>
+	<br><br><br><br>
+	
+
+		</div>
+<form th:method="PATCH" th:action="@{/tasks/comment/edit}" th:object="${comment}">
+	Автор: <span th:text="${comment.author.name}"/><br>
+	Создан: <span th:text="${#temporals.format(comment.createdAt, 'dd-MM-yyyy HH:mm')}"/><br>
+	Изменен: <span th:text="${#temporals.format(comment.editedAt, 'dd-MM-yyyy HH:mm')}"/><br><br>
+	<input type="hidden" th:field="*{id}" th:value="${comment.id}"/>
+	<p> Комментарий: <input type="text" th:field="*{body}"/></p>
+	
+						<div th:if="${#fields.hasAnyErrors()}">
+							<span th:each="fieldError : ${#fields.allErrors()}">
+								<p th:text="${fieldError}"/>
+								</span>
+								</div>
+						<input type="hidden" th:field="${comment.author}"/>
+						<input type="hidden" th:field="${comment.task}"/>
+						<input type="hidden" th:field="${comment.createdAt}"/>
+						<input type="hidden" th:field="${comment.editedAt}"/>
+	<input type="submit" value="Сохранить"/>
+	<br><br><br><br><br>
+	<a th:href="@{/tasks/comment/delete/{id}(id=${comment.id})}" th:text="'Удалить комментарий'"/>
+</form>
+</body>
+</html>

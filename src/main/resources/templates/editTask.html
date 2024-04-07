@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Изменение задачи</title>
+<link href="../static/styles.css" th:href="@{/styles.css}" rel="stylesheet" />
+</head>
+<body>
+	<center>
+
+		<div id="contentdiv" >
+				<div id="headerdiv">
+		</div>
+		<div style="margin: 40px;">
+	<a th:href="@{/tasks/0}">Задачи</a><br>
+	<a th:href="@{/people/0}">Пользователи</a><br>
+
+
+</div>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/registration}"><h3>Регистрация</h3></a>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/login}"><h3>Войти</h3></a>
+<span th:unless="${error}==null" th:text="${error}"></span>
+<a sec:authorize="isAuthenticated()" th:href="@{/tasks/add}"><h3>Создать</h3></a>
+<form th:method="PATCH" th:action="@{/tasks/edit}" th:object="${task}">
+	<input type="hidden" th:field="*{id}" th:value="${task.id}"/>
+	<p> Название: <input type="text" th:field="*{title}"/></p>
+	<p> Описание: <input type="text" th:field="*{description}"/></p>
+	<p> Статус: <select th:field="*{status}">
+    						<option th:each="statusT : ${T(ru.terentyev.EffectiveMobile.entities.Task.Status).values()}"
+        						th:value="${statusT}" th:text="${statusT?.translation}"></option>
+						</select><br></p>
+	<p> Приоритет: <select th:field="*{priority}">
+    						<option th:each="priorityT : ${T(ru.terentyev.EffectiveMobile.entities.Task.Priority).values()}"
+        						th:value="${priorityT}" th:text="${priorityT?.translation}"></option>
+						</select><br></p>
+	<p> Исполнитель: <select th:field="*{executorId}">
+    						<option th:each="executorName : ${executors}"
+        						th:value="${executorName.id}" th:text="${executorName.name}"></option>
+						</select><br></p>
+						<div th:if="${#fields.hasAnyErrors()}">
+							<span th:each="fieldError : ${#fields.allErrors()}">
+								<p th:text="${fieldError}"/>
+								</span>
+								</div>
+						<input type="hidden" th:field="${task.author}"/>
+						<input type="hidden" th:field="${task.executor}"/>
+						<input type="hidden" th:field="${task.createdAt}"/>
+						<input type="hidden" th:field="${task.editedAt}"/>
+	<input type="submit" value="Сохранить"/>
+	<br><br><br>
+</form>
+<!--<a sec:authorize="isAuthenticated()" th:href="@{/tasks/delete/{id}(id=${task.id})} th:text="'Удалить задачу'"/>-->
+</body>
+</html>

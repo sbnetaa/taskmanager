@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Задачи</title>
+<link href="../static/styles.css" th:href="@{/styles.css}" rel="stylesheet" />
+</head>
+<body>
+	<center>
+
+		<div id="contentdiv" >
+				<div id="headerdiv">
+		</div>
+		<div style="margin: 40px;">
+	<a th:href="@{/tasks/0}">Задачи</a><br>
+	<a th:href="@{/people/0}">Пользователи</a><br>
+
+
+</div>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/registration}"><h3>Регистрация</h3></a>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/login}"><h3>Войти</h3></a>
+<span th:unless="${error}==null" th:text="${error}"></span>
+<div th:each="comment : ${comments}">
+		
+	Задача <a th:href="@{/tasks/view/{id}/0(id=${comment.task.id})}" th:text="${comment.task.title}"></a><br>
+	Комментарий: <span th:text="${comment.body}"/><br>
+	Автор: <a th:href="@{/people/view/{id}/comments/0(id=${comment.author?.id})}" th:text="${comment.author?.name}"/><br>
+	Создан: <span th:text="${#temporals.format(comment.createdAt, 'dd-MM-yyyy HH:mm')}"/><br>
+	Изменен: <span th:text="${#temporals.format(comment.editedAt, 'dd-MM-yyyy HH:mm')}"/><br>
+	<a th:if="${personId}==${comment.author?.id}" th:href="@{/tasks/comment/edit/{id}(id=${comment.id})}" th:text="'Редактировать'"/><br><br><br><br>
+	</div>
+	<div th:unless="${comments.getTotalPages()}==0">
+	<a th:unless="${currentPage}==0" th:href="@{/people/view/{id}/comments/0(id=${authorId})}" th:text="'Первая'"/>
+<a th:unless="${currentPage}==0" th:href="@{/people/view/{id}/comments/{page}(page=${currentPage}-1, id=${authorId})}" th:text="'Предыдущая'"/>
+<span th:text="${currentPage}+1"/>
+<a th:unless="${currentPage}==${comments.getTotalPages()-1}" th:href="@{/people/view/{id}/comments/{page}(page=${currentPage}+1, id=${authorId})}" th:text="'Следующая'"/>
+<a th:unless="${currentPage}==${comments.getTotalPages()-1}" th:href="@{/people/view/{id}/comments/{page}(page=${comments.getTotalPages()}-1, id=${authorId})}" th:text="'Последняя'"/>
+		</div>
+		</div>
+		<div id="prefooter"></div>
+		</div>
+<div id="footerdiv">Это подвал</div>
+</center>
+</body>
+</html>

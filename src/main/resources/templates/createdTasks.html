@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Задачи</title>
+<link href="../static/styles.css" th:href="@{/styles.css}" rel="stylesheet" />
+</head>
+<body>
+	<center>
+
+		<div id="contentdiv" >
+				<div id="headerdiv">
+		</div>
+		<div style="margin: 40px;">
+	<a th:href="@{/tasks/0}">Задачи</a><br>
+	<a th:href="@{/people/0}">Пользователи</a><br>
+
+
+</div>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/registration}"><h3>Регистрация</h3></a>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/login}"><h3>Войти</h3></a>
+<h2>Созданные задачи пользователя <!--<a th:href="@{/view/{id}(id=${tasks}?.get(0)?.getAuthor()?.getId())}" th:text="${tasks}?.get(0)?.getAuthor()?.getName()"/>--></h2>
+<span th:unless="${error}==null" th:text="${error}"></span>
+<div th:each="task : ${tasks}">
+		
+	<a th:href="@{/tasks/view/{id}(id=${task.id})}" th:text="${task.title}"></a><br>
+	Описание: <span th:text="${task.description}"/><br><br>
+	Статус: <span th:text="${task.status.translation}"/><br>
+	Приоритет: <span th:text="${task.priority.translation}"/><br>
+	Создатель: <a th:href="@{/people/view/{id}/created-tasks/0(id=${task.author?.id})}" th:text="${task.author?.name}"/><br>
+	Исполнитель: <a th:href="@{/people/view/{id}/created-tasks/0(id=${task.executor?.id})}" th:text="${task.executor?.name}"/><br>
+	Создана: <span th:text="${#temporals.format(task.createdAt, 'dd-MM-yyyy HH:mm')}"/><br>
+	Изменена: <span th:text="${#temporals.format(task.editedAt, 'dd-MM-yyyy HH:mm')}"/><br><br><br><br>
+	</div>
+	<div th:unless="${tasks.getTotalPages()}==0">
+	<a th:unless="${currentPage}==0" th:href="@{/view/{id}(id=${authorId})/created-tasks/0}" th:text="'Первая'"/>
+<a th:unless="${currentPage}==0" th:href="@{/view/{id}(id=${authorId})/created-tasks/{page}(page=${currentPage}-1)}" th:text="'Предыдущая'"/>
+<span th:text="${currentPage}+1"/>
+<a th:unless="${currentPage}==${tasks.getTotalPages()-1}" th:href="@{/view/{id}(id=${authorId})/created-tasks/{page}(page=${currentPage}+1)}" th:text="'Следующая'"/>
+<a th:unless="${currentPage}==${tasks.getTotalPages()-1}" th:href="@{/view/{id}(id=${authorId})/created-tasks/{page}(page=${tasks.getTotalPages()}-1)}" th:text="'Последняя'"/>
+		</div>
+		</div>
+		<div id="prefooter"></div>
+		</div>
+<div id="footerdiv">Это подвал</div>
+</center>
+</body>
+</html>

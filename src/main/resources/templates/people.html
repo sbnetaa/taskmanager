@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Задачи</title>
+<link href="../static/styles.css" th:href="@{/styles.css}" rel="stylesheet" />
+</head>
+<body>
+	<center>
+
+		<div id="contentdiv" >
+				<div id="headerdiv">
+		</div>
+		<div style="margin: 40px;">
+	<a th:href="@{/tasks/0}">Задачи</a><br>
+	<a th:href="@{/people/0}">Пользователи</a><br>
+
+
+</div>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/registration}"><h3>Регистрация</h3></a>
+<a sec:authorize="!isAuthenticated()" th:href="@{/auth/login}"><h3>Войти</h3></a>
+<span th:unless="${error}==null" th:text="${error}"></span>
+<div th:each="person : ${people}">
+		
+	<a th:href="@{/people/view/{id}(id=${person.id})}" th:text="${person.name}"></a><br>
+<br><br><br><br>
+	</div>
+	<div th:unless="${people.getTotalPages()}==0">
+	<a th:unless="${currentPage}==0" th:href="@{/people/0}" th:text="'Первая'"/>
+<a th:unless="${currentPage}==0" th:href="@{/people/{page}(page=${currentPage}-1)}" th:text="'Предыдущая'"/>
+<span th:text="${currentPage}"/>
+<a th:unless="${currentPage}==${people.getTotalPages()-1}" th:href="@{/people/{page}(page=${currentPage}+1)}" th:text="'Следующая'"/>
+<a th:unless="${currentPage}==${people.getTotalPages()-1}" th:href="@{/people/{page}(page=${people.getTotalPages()}-1)}" th:text="'Последняя'"/>
+		</div>
+		</div>
+		<div id="prefooter"></div>
+		</div>
+<div id="footerdiv">Это подвал</div>
+</center>
+</body>
+</html>
