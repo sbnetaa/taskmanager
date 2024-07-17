@@ -18,6 +18,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -75,11 +76,13 @@ public class CommonRestExceptionHandler {
 		responseMap.put("время", LocalDateTime.now().toString());
 		responseMap.put("статус", "400 BAD REQUEST");
 		responseMap.put("ошибка", "Некорректно составлен JSON");
+		/*
 		if (request.getMethod().equals("GET")) {
 			responseMap.put("результат", "Выбраны все записи");
 			List<Task> foundTasks = taskService.findAll();
-			responseMap.put("tasks", (taskService.removeCommentsRecord(foundTasks)));
+			responseMap.put("tasks", (foundTasks));
 		}
+		*/
 		return new ResponseEntity<>(objectMapper.writeValueAsString(responseMap), putHeaders(), HttpStatus.BAD_REQUEST);
 		
 	}

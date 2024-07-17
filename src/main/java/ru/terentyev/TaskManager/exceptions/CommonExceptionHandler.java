@@ -2,7 +2,6 @@ package ru.terentyev.TaskManager.exceptions;
 
 import javax.naming.AuthenticationException;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -10,7 +9,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import ru.terentyev.TaskManager.controllers.AuthController;
 import ru.terentyev.TaskManager.controllers.PersonController;
@@ -19,10 +17,7 @@ import ru.terentyev.TaskManager.controllers.TaskController;
 @ControllerAdvice(assignableTypes = {TaskController.class, PersonController.class, AuthController.class})
 public class CommonExceptionHandler {
 	
-	@Autowired
-	public CommonExceptionHandler(ObjectMapper objectMapper) {
-		super();
-	}
+	public CommonExceptionHandler() {}
 
 	@ExceptionHandler(value = TaskNotFoundException.class)
 	@ResponseStatus(value = HttpStatus.NOT_FOUND)

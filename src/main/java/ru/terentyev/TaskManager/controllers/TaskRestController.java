@@ -1,6 +1,7 @@
 package ru.terentyev.TaskManager.controllers;
 
 import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +16,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import ru.terentyev.TaskManager.entities.TaskRequest;
+import ru.terentyev.TaskManager.entities.TaskResponse;
 import ru.terentyev.TaskManager.security.PersonDetails;
 import ru.terentyev.TaskManager.services.TaskService;
 
@@ -57,42 +61,57 @@ public class TaskRestController {
 	// TODO block patch author
 	// TODO change PersonDetailsService to UserDetailsService
 	
+	// TODO LocalDateTime parse Exception and message
+	
 	// TODO truncatedTo WEB
 	
 	private TaskService taskService;
+	private ObjectMapper objectMapper; // TODO remove objectMapper
 	
 	@Autowired
-	public TaskRestController(TaskService taskService) {
+	public TaskRestController(TaskService taskService, ObjectMapper objectMapper) {
 		super();
 		this.taskService = taskService;
-		
+		this.objectMapper = objectMapper;
 	}
 	
+	public TaskRestController() {}
 	
 		@GetMapping(value = "", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
 		, headers = "Accept=application/json")
-		public ResponseEntity<String> showTasks(@RequestBody(required = false) TaskRequest request) throws JsonMappingException, JsonProcessingException {
-			//Map<String, String[]> requestMap = objectMapper.convert
-			return taskService.showTasks(request);	
+		public ResponseEntity<TaskResponse> showTasks(@RequestBody(required = false) TaskRequest request) throws JsonMappingException, JsonProcessingException {
+			return taskService.showTasks(request);
 		}
-	
+		
+		
+		@GetMapping(value = "/test", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
+		, headers = "Accept=application/json")
+		public void test(@RequestBody(required = false) String testRequest){
+			Map<String, String[]> map = objectMapper.convertValue(testRequest, new TypeReference<Map<String, String[]>>(){});
+			System.out.println("OK");
+		}
+		
+		@GetMapping(value = "/test2", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
+				, headers = "Accept=application/json")
+		 public void test2(@RequestBody(required = false) String testRequest) {
+			TaskRequest taskRequest = objectMapper.convertValue(testRequest, TaskRequest.class);
+			System.out.println("OK2");
+		}
 		
 		@PostMapping(value = "", produces = MediaType.APPLICATION_JSON_VALUE, consumes = {"application/json"}
 		, headers = "Accept=application/json")
-		public ResponseEntity<String> addTask(@RequestBody Map<String, String> taskAsMap, BindingResult br
+		public ResponseEntity<TaskResponse> addTask(@RequestBody TaskRequest request, BindingResult br
 				, @AuthenticationPrincipal PersonDetails pd) throws JsonProcessingException {
-			return taskService.addTask(taskAsMap, br, pd);
-
+			return taskService.addTask(request, br, pd);
 		}
 		
 		@PatchMapping(value = "", consumes = "application/json", headers = "Accept=application/json")
-		public ResponseEntity<String> updateTask(@RequestBody Map<String, String>[] request) throws JsonProcessingException {
+		public ResponseEntity<TaskResponse> updateTask(@RequestBody TaskRequest[] request) throws JsonProcessingException {
 			return taskService.updateTask(request);			
 		}
 				
 		@DeleteMapping(value = "", consumes = "application/json", headers = "Accept=application/json")
-		public ResponseEntity<String> deleteTask(@RequestBody Map<String, String[]> requestMap) throws JsonProcessingException {
-			return taskService.deleteTask(requestMap);
+		public ResponseEntity<String> deleteTask(@RequestBody TaskRequest request) throws JsonProcessingException {
+			return taskService.deleteTask(request);
 		}
-		
 }

@@ -10,7 +10,6 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators.PropertyGenerator;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators.IntSequenceGenerator;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;

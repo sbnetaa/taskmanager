@@ -8,7 +8,6 @@ import org.springframework.data.annotation.CreatedDate;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIdentityReference;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators.PropertyGenerator;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators.IntSequenceGenerator;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;

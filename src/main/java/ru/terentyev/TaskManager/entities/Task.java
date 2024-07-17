@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.format.annotation.DateTimeFormat;
 
@@ -12,6 +13,7 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIdentityReference;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators.PropertyGenerator;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -28,9 +30,6 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-
-import com.fasterxml.jackson.annotation.ObjectIdGenerators.PropertyGenerator;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators.IntSequenceGenerator;
 
 @Entity
 @Table(name = "tasks")
@@ -64,7 +63,10 @@ public class Task {
 	private transient long executorId; // Это поле нужно для web контроллера приложения.
 	//При использовании поля 'executor' напрямую возникают ошибки, так как шаблонизатор Thymeleaf не умеет обрабатывать что-то там (забыл :) )
 	@OneToMany(mappedBy = "task", fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
+	//@JsonSerialize(using = MultipleTasksSerializer.class)
+	//@JsonIgnore
 	private List<Comment> comments;
+	private transient String commentsCount;
 	@CreatedDate
 	@Column(name = "created_at")
 	@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -172,6 +174,15 @@ public class Task {
 		this.comments = comments;
 	}
 
+	public String getCommentsCount() {
+		return commentsCount;
+	}
+
+
+	public void setCommentsCount(String commentsCount) {
+		this.commentsCount = commentsCount;
+	}
+
 
 	@Override
 	public String toString() {
@@ -259,8 +270,6 @@ public class Task {
 
 		public String getTranslation() {
 			return translation;
-		}	
-		
+		}			
 	}
-
 }

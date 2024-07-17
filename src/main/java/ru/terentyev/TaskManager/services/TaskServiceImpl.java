@@ -5,9 +5,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -20,11 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.BindingResult;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.persistence.EntityManager;
@@ -41,6 +37,7 @@ import jakarta.validation.Valid;
 import ru.terentyev.TaskManager.entities.Person;
 import ru.terentyev.TaskManager.entities.Task;
 import ru.terentyev.TaskManager.entities.TaskRequest;
+import ru.terentyev.TaskManager.entities.TaskResponse;
 import ru.terentyev.TaskManager.exceptions.PersonNotFoundException;
 import ru.terentyev.TaskManager.exceptions.TaskNotFoundException;
 import ru.terentyev.TaskManager.repositories.PersonRepository;
@@ -50,7 +47,6 @@ import ru.terentyev.TaskManager.security.PersonDetails;
 @Service
 @Transactional(readOnly = true)
 public class TaskServiceImpl implements TaskService {
-
 	
 	private TaskRepository taskRepository;
 	private PersonRepository personRepository;
@@ -72,45 +68,43 @@ public class TaskServiceImpl implements TaskService {
 		this.objectMapper = objectMapper;
 	}
 	
-	public ResponseEntity<String> showTasks(TaskRequest request) throws JsonProcessingException {
-		Map<String, String[]> requestMap = objectMapper.convertValue(request, new TypeReference<Map<String, String[]>>(){});
-		if (requestMap == null || requestMap.isEmpty())
-			return new ResponseEntity<String>(objectMapper.writeValueAsString(findAll()), HttpStatus.OK);
-		
-		//Map<String, String[]> requestMap = objectMapper.readValue
-				//(request, new TypeReference<Map<String, String[]>>(){});
-		Map<String, Object> responseMap = fillResponseMap(requestMap);
-			return new ResponseEntity<>(objectMapper.writeValueAsString(removeCommentsRecord((List<Task>)responseMap.get("tasks"))), HttpStatus.OK);
-
+	public ResponseEntity<TaskResponse> showTasks(TaskRequest request) throws JsonProcessingException {
+		if (request == null) 
+			throw new JsonProcessingException("Передан пустой JSON"){};
+		return new ResponseEntity<>(fillResponse(request), HttpStatus.OK);
 	}
 	
-	public Map<String, Object> fillResponseMap(Map<String, String[]> requestMap) throws JsonProcessingException, NumberFormatException{
-		Map<String, Object> responseMap = null;
-		if (requestMap.containsKey("id") && requestMap.get("id").length == 1) 
-			responseMap = getSingleTask(Long.valueOf(requestMap.get("id")[0])
-					, Integer.valueOf(requestMap.getOrDefault("page", new String[]{"0"})[0]));
-		
-		if (requestMap.get("meetingCriteria") != null && requestMap.get("meetingCriteria")[0].equals("any"))
-			responseMap = searchForMeetsAnyCriteria(requestMap);
-		else responseMap = searchForMeetsAllCriteria(requestMap);
-		return responseMap;
+	public TaskResponse fillResponse(TaskRequest request) throws JsonProcessingException, NumberFormatException{
+		//if (request.getId() != null && request.getId().length == 1) 
+			//return getSingleTask(Long.valueOf(request.getId()[0])
+					//, request.getPage());
+		return searchForMeetsAllCriteria(request);
 	}
 	
-	public Map<String, Object> searchForMeetsAllCriteria(Map<String, String[]> requestMap) {
-		Map<String, Object> tasksMap = new LinkedHashMap<>();
-		tasksMap.put("tasks", searchByCriteria(requestMap));
-		return tasksMap;
+	public TaskResponse searchForMeetsAllCriteria(TaskRequest request) {
+		final int PAGE_SIZE = 10;
+		TaskResponse response = new TaskResponse();
+		List<Task> foundTasks = searchByCriteria(request);
+		for (Task task : foundTasks) {
+			int commentsCount = commentService.countByTask(task.getId());
+			task.setCommentsCount(commentsCount + " comments, " + (int) Math.ceil(commentsCount / PAGE_SIZE) + " pages");
+		}
+		response.setTasks(foundTasks);
+		return response;
 	}
 	
 	// Не уверен, что это стоит делать. Отложил на потом.
-	public Map<String, Object> searchForMeetsAnyCriteria(Map<String, String[]> requestMap) {
+	public TaskResponse searchForMeetsAnyCriteria(TaskRequest request) {
 		return null;
 	}
 	
-	public Map<String, Object> getSingleTask(long id, int page) throws JsonProcessingException {
+	public TaskResponse getSingleTask(long id, int page) throws JsonProcessingException {
 			Task task = findById(id);
 			task.setComments(commentService.findByTask(id, page).getContent());
-			return objectMapper.convertValue(editCommentsRecord(task, page), new TypeReference<Map<String, Object>>(){});
+			//objectMapper.addMixIn(Task.class, SingleTaskMixin.class);
+			TaskResponse response = new TaskResponse();
+			response.setTasks(List.of(task));
+			return response;
 	}
 	
 	public JsonNode editCommentsRecord(Task task, int page) throws JsonProcessingException {
@@ -122,73 +116,61 @@ public class TaskServiceImpl implements TaskService {
 		return root;
 	}
 	
-	public ResponseEntity<String> checkIfAddedTaskAlreadyHasId(Task taskToAdd) throws JsonProcessingException {
-		ResponseEntity<String> response = null;
-		if (taskToAdd.getId() != null) 
-			response = new ResponseEntity<>(objectMapper
-			.writeValueAsString(Collections.singletonMap
-			("предупреждение", "ID не должен быть указан."
-			+ " Он будет сгенерирован автоматически." 
-			+ " Для изменения записи используйте PATCH запрос.")), HttpStatus.CREATED);
-		else response = new ResponseEntity<>(HttpStatus.OK);
-		return response;
+	public ResponseEntity<TaskResponse> checkIfAddedTaskAlreadyHasId(TaskRequest request) throws JsonProcessingException {
+		TaskResponse response = new TaskResponse();
+		if (request.getId() != null || request.getAuthor() != null) 
+			response.setError("Поля 'id' и 'author' не должны быть указаны."
+			+ " Они будут сгенерированы автоматически." 
+			+ " Для изменения записи используйте PATCH запрос.");
+		return new ResponseEntity<>(response, HttpStatus.CREATED);
 	}
 	
-	public Task fillAddedTask(Task taskToAdd, PersonDetails pd) {
-		taskToAdd.setId(null);
+	public Task fillAddedTask(TaskRequest request, PersonDetails pd) {
+		@Valid Task taskToAdd = new Task();
+		taskToAdd.setTitle(request.getTitle()[0]);
+		taskToAdd.setDescription(request.getDescription()[0]);
 		taskToAdd.setAuthor(pd.getPerson());
+		taskToAdd.setExecutor(personDetailsService.findById(request.getExecutor()[0]));
+		taskToAdd.setPriority(Task.Priority.valueOf(request.getPriority()[0]));
+		taskToAdd.setStatus(Task.Status.valueOf(request.getStatus()[0]));
 		taskToAdd.setCreatedAt(LocalDateTime.now());
+		taskToAdd.setEditedAt(LocalDateTime.now());
 		return taskToAdd;	
 	}
 	
-	public JsonNode removeCommentsRecord(List<Task> tasks) throws JsonMappingException, JsonProcessingException {
-		final long PAGE_SIZE = 10;
-		ArrayNode arrayNode = objectMapper.createArrayNode();
-		for (Task task : tasks) {
-			int commentsCount = commentService.countByTask(task.getId());
-	        ObjectNode taskNode = objectMapper.valueToTree(task);
-	        taskNode.set("comments", objectMapper.convertValue(commentsCount + " comments, " 
-	    	+ (int) (Math.ceil((double) commentsCount / PAGE_SIZE)) + " pages", JsonNode.class));
-	        arrayNode.add(taskNode);
-	    }		
-		return arrayNode;
-	}
-	
-	public Task fillPatchingFields(Map<String, String> map) {
-		Task task = findById(Long.parseLong(map.get("id")));
-		if (map.containsKey("title")) task.setTitle(map.get("title"));
-		if (map.containsKey("description")) task.setDescription(map.get("description"));
-		if (map.containsKey("status")) task.setStatus(Task.Status.valueOf(map.get("status")));
-		if (map.containsKey("priority")) task.setPriority(Task.Priority.valueOf(map.get("priority")));
-		if (map.containsKey("executor")) task.setAuthor(personDetailsService.findById(Long.parseLong(map.get("executor"))));
-		return task;
-	}
-	
-	public ResponseEntity<String> addTask(Map<String, String> taskAsMap, BindingResult br
+	public ResponseEntity<TaskResponse> addTask(TaskRequest request, BindingResult br
 			, PersonDetails pd) throws JsonProcessingException{
-		@Valid Task taskToAdd = objectMapper.convertValue(taskAsMap, Task.class);
-		ResponseEntity<String> response = checkIfAddedTaskAlreadyHasId(taskToAdd);
-		taskToAdd = fillAddedTask(taskToAdd, pd);;
+		Task taskToAdd = fillAddedTask(request, pd);
+		ResponseEntity<TaskResponse> response = checkIfAddedTaskAlreadyHasId(request);
 		save(taskToAdd);
+		response.getBody().getTasks().add(taskToAdd);
 		return response;
 	}
 	
 	
-	public ResponseEntity<String> updateTask(Map<String, String>[] request) throws JsonMappingException, JsonProcessingException{
-		List<Task> tasksToReturn = new ArrayList<>();
-		for (Map<String, String> map : request) {
-			Task task = fillPatchingFields(map);
-			save(task);
-			tasksToReturn.add(task);
-		}
-		JsonNode root = removeCommentsRecord(tasksToReturn);
-		return new ResponseEntity<String>(objectMapper.writeValueAsString(Collections.singletonMap("updatedTasks", root)), HttpStatus.OK);
+	public Task fillPatchingFields(TaskRequest singlePatchRequest) {
+		Task task = findById(singlePatchRequest.getId()[0]);
+		if (singlePatchRequest.getTitle() != null) task.setTitle(singlePatchRequest.getTitle()[0]);
+		if (singlePatchRequest.getDescription() != null) task.setDescription(singlePatchRequest.getDescription()[0]);
+		if (singlePatchRequest.getStatus() != null) task.setStatus(Task.Status.valueOf(singlePatchRequest.getStatus()[0]));
+		if (singlePatchRequest.getPriority() != null) task.setPriority(Task.Priority.valueOf(singlePatchRequest.getPriority()[0]));
+		if (singlePatchRequest.getExecutor() != null) task.setAuthor(personDetailsService.findById(singlePatchRequest.getExecutor()[0]));
+		return task;
 	}
 	
-	public ResponseEntity<String> deleteTask(Map<String, String[]> requestMap) throws JsonProcessingException{
+	public ResponseEntity<TaskResponse> updateTask(TaskRequest[] request) throws JsonMappingException, JsonProcessingException{
+		TaskResponse response = new TaskResponse();
+		for (TaskRequest singlePatchRequest : request) {
+			Task task = fillPatchingFields(singlePatchRequest);
+			save(task);
+			response.getTasks().add(task);
+		}
+		return new ResponseEntity<>(response, HttpStatus.OK);
+	}
+	
+	public ResponseEntity<String> deleteTask(TaskRequest request) throws JsonProcessingException{
 		List<Long> removedIds = new ArrayList<>();
-		for (String idAsString : requestMap.get("id")) {
-			long id = Long.parseLong(idAsString);
+		for (long id : request.getId()) {
 			deleteById(id);
 			removedIds.add(id);			
 		}
@@ -236,7 +218,7 @@ public class TaskServiceImpl implements TaskService {
 		return taskRepository.findByIdIn(ids, PageRequest.of(page, 5));
 	}
 	
-	public List<Task> searchByCriteria(Map<String, String[]> searchCriteria) {
+	public List<Task> searchByCriteria(TaskRequest request) {
 		EntityManagerFactory emf = Persistence.createEntityManagerFactory("myPersistence");
 		EntityManager em = emf.createEntityManager();
 		CriteriaBuilder cb = em.getCriteriaBuilder();
@@ -248,65 +230,63 @@ public class TaskServiceImpl implements TaskService {
 		
 		//root.fetch("comments", JoinType.LEFT);
 		
-		if (searchCriteria.containsKey("id")) {
+		if (request.getId() != null) {
 			List<Predicate> subPredicates = new ArrayList<>();
-			for (String id : searchCriteria.get("id")) subPredicates.add(cb.equal(root.get("id"), Long.parseLong(id)));
+			for (long id : request.getId()) subPredicates.add(cb.equal(root.get("id"), id));
 			predicates.add(cb.or(subPredicates.toArray(new Predicate[0])));
 		}
 		
-		if (searchCriteria.containsKey("executor")) {					
-			sq.select(rootPerson).where(rootPerson.get("id").in(Arrays.stream(searchCriteria.get("executor")).mapToLong(e -> Long.valueOf(e)).boxed().toArray()));
+		if (request.getExecutor() != null) {					
+			sq.select(rootPerson).where(rootPerson.get("id").in(request.getExecutor()));
 			predicates.add(cb.equal(root.get("executor"), sq));
-		} else if (searchCriteria.containsKey("executorName")) {
+		} else if (request.getExecutorName() != null) {
 			List<Predicate> subPredicates = new ArrayList<>();
-			for (String nameLike : searchCriteria.get("executorName")) subPredicates.add(cb.like(cb.lower(rootPerson.get("name")), "%" + nameLike.toLowerCase() + "%"));
+			for (String nameLike : request.getExecutorName()) subPredicates.add(cb.like(cb.lower(rootPerson.get("name")), "%" + nameLike.toLowerCase() + "%"));
 			predicates.add(cb.and(subPredicates.toArray(new Predicate[0])));
 			} 
 		
-		if (searchCriteria.containsKey("author")) {
-			sq.select(rootPerson).where(rootPerson.get("id").in(Arrays.stream(searchCriteria.get("author")).mapToLong(e -> Long.valueOf(e)).boxed().toArray()));
+		if (request.getAuthor() != null) {
+			sq.select(rootPerson).where(rootPerson.get("id").in(request.getAuthor()));
 			predicates.add(cb.equal(root.get("author"), sq));
-		} else if (searchCriteria.containsKey("authorName")) {
+		} else if (request.getAuthorName() != null) {
 			List<Predicate> subPredicates = new ArrayList<>();
-			for (String nameLike : searchCriteria.get("authorName")) subPredicates.add(cb.like(cb.lower(rootPerson.get("name")), "%" + nameLike.toLowerCase() + "%"));
-			predicates.add(cb.and(subPredicates.toArray(new Predicate[0])));
-			//predicates.add(cb.like(cb.lower(rootPerson.get("name")), "%" + searchCriteria.get("authorName") + "%"));
-		}
-		
-		if (searchCriteria.containsKey("title")) {
-			List<Predicate> subPredicates = new ArrayList<>();
-			for (String titleLike : searchCriteria.get("title")) subPredicates.add(cb.like(cb.lower(root.get("title")), "%" + titleLike.toLowerCase() + "%"));
-			predicates.add(cb.and(subPredicates.toArray(new Predicate[0])));
-			//predicates.add(cb.like(cb.lower(root.get("title")), "%" + searchCriteria.get("title") + "%"));
-		}
-		
-		if (searchCriteria.containsKey("description")) {
-			List<Predicate> subPredicates = new ArrayList<>();
-			for (String descriptionLike : searchCriteria.get("description")) subPredicates.add(cb.like(cb.lower(root.get("description")), "%" + descriptionLike.toLowerCase() + "%"));
+			for (String nameLike : request.getAuthorName()) subPredicates.add(cb.like(cb.lower(rootPerson.get("name")), "%" + nameLike.toLowerCase() + "%"));
 			predicates.add(cb.and(subPredicates.toArray(new Predicate[0])));
 		}
 		
-		if (searchCriteria.containsKey("status")) 
-			predicates.add(root.get("status").in(Task.Status.getStatusesBySubstring(searchCriteria.get("status"))));
+		if (request.getTitle() != null) {
+			List<Predicate> subPredicates = new ArrayList<>();
+			for (String titleLike : request.getTitle()) subPredicates.add(cb.like(cb.lower(root.get("title")), "%" + titleLike.toLowerCase() + "%"));
+			predicates.add(cb.and(subPredicates.toArray(new Predicate[0])));
+		}
 		
-		if (searchCriteria.containsKey("priority"))
-			predicates.add(root.get("priority").in(Task.Priority.getPrioritiesBySubstring(searchCriteria.get("priority"))));
+		if (request.getDescription() != null) {
+			List<Predicate> subPredicates = new ArrayList<>();
+			for (String descriptionLike : request.getDescription()) subPredicates.add(cb.like(cb.lower(root.get("description")), "%" + descriptionLike.toLowerCase() + "%"));
+			predicates.add(cb.and(subPredicates.toArray(new Predicate[0])));
+		}
+		
+		if (request.getStatus() != null) 
+			predicates.add(root.get("status").in(Task.Status.getStatusesBySubstring(request.getStatus())));
+		
+		if (request.getPriority() != null)
+			predicates.add(root.get("priority").in(Task.Priority.getPrioritiesBySubstring(request.getPriority())));
 	
-		if (searchCriteria.containsKey("createdBefore"))
-			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(searchCriteria.get("createdBefore")[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+		if (request.getCreatedBefore() != null)
+			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedBefore()[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
 
 		
-		if (searchCriteria.containsKey("createdAfter")) 
-			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(searchCriteria.get("createdAfter")[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+		if (request.getCreatedAfter() != null) 
+			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedAfter()[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
 		
-		if (searchCriteria.containsKey("editedBefore"))
-			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(searchCriteria.get("editedBefore")[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+		if (request.getEditedBefore() != null)
+			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedBefore()[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
 		
-		if (searchCriteria.containsKey("editedAfter"))
-			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(searchCriteria.get("editedAfter")[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+		if (request.getEditedAfter() != null)
+			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedAfter()[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
 	
-		if (searchCriteria.containsKey("orderBy")) {
-			cq.orderBy(Arrays.stream(searchCriteria.get("orderBy")).map(e -> {
+		if (request.getOrderBy() != null) {
+			cq.orderBy(Arrays.stream(request.getOrderBy()).map(e -> {
 			if (e.contains("DESC")) return cb.desc(root.get(e.replace("DESC", "")));
 			else return cb.asc(root.get(e));
 			}).toList());

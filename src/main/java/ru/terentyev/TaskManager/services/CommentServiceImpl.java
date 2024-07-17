@@ -1,7 +1,7 @@
 package ru.terentyev.TaskManager.services;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

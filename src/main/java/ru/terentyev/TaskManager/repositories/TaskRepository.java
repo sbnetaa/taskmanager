@@ -1,15 +1,14 @@
 package ru.terentyev.TaskManager.repositories;
 
-import org.springframework.stereotype.Repository;
-
-import ru.terentyev.TaskManager.entities.Person;
-import ru.terentyev.TaskManager.entities.Task;
-
 import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import ru.terentyev.TaskManager.entities.Person;
+import ru.terentyev.TaskManager.entities.Task;
 
 @Repository
 public interface TaskRepository extends JpaRepository<Task, Long> {
