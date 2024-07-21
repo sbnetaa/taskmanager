@@ -6,15 +6,15 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 
-public class StringToIntegerDeserializer extends JsonDeserializer<long[]> {
+public class StringToLongDeserializer extends JsonDeserializer<Long[]> {
 
     @Override
-    public long[] deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+    public Long[] deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
         JsonNode node = p.getCodec().readTree(p);
         if (node.isTextual()) {
-            return new long[]{Long.parseLong(node.asText())};
+            return new Long[]{Long.parseLong(node.asText())};
         } else if (node.isNumber()) {
-            return new long[]{node.longValue()};
+            return new Long[]{node.longValue()};
         } else {
             throw new IOException("Invalid value for integer: " + node.toString());
         }

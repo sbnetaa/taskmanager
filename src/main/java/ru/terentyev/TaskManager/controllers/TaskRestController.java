@@ -1,8 +1,7 @@
 package ru.terentyev.TaskManager.controllers;
 
-import java.util.Map;
-
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -10,15 +9,15 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import ru.terentyev.TaskManager.entities.TaskRequest;
 import ru.terentyev.TaskManager.entities.TaskResponse;
@@ -65,37 +64,41 @@ public class TaskRestController {
 	
 	// TODO truncatedTo WEB
 	
+	// TODO print executorId and executorName in response (and author)
+	// TODO при добавлении задачи executor не найден
+	// TODO response commentsCount null (0)
+	// TODO регистрация через rest
+	
+	
 	private TaskService taskService;
-	private ObjectMapper objectMapper; // TODO remove objectMapper
 	
 	@Autowired
-	public TaskRestController(TaskService taskService, ObjectMapper objectMapper) {
+	public TaskRestController(TaskService taskService) {
 		super();
 		this.taskService = taskService;
-		this.objectMapper = objectMapper;
 	}
 	
 	public TaskRestController() {}
 	
 		@GetMapping(value = "", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
+			, headers = "Accept=application/json")
+		public ResponseEntity<TaskResponse> showAllTasks(@RequestParam(required = false) Integer page, @RequestBody(required = false) String jsonInput) throws JsonMappingException, JsonProcessingException {
+			TaskResponse response = new TaskResponse();
+			response.setTasks(taskService.findAll(page).getContent());
+			return new ResponseEntity<>(response, HttpStatus.OK);
+		}
+	
+		@GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
 		, headers = "Accept=application/json")
-		public ResponseEntity<TaskResponse> showTasks(@RequestBody(required = false) TaskRequest request) throws JsonMappingException, JsonProcessingException {
-			return taskService.showTasks(request);
+		public ResponseEntity<TaskResponse> showTasks(@PathVariable(required=false) Long id, @RequestParam(required = false, defaultValue = "0") int page, @RequestBody(required = false) String jsonInput) throws JsonMappingException, JsonProcessingException {
+			if (id == null) return taskService.showTasks(null);
+				return new ResponseEntity<TaskResponse>(taskService.getSingleTask(id, page), HttpStatus.OK);
 		}
 		
-		
-		@GetMapping(value = "/test", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
+		@PostMapping(value = "/search", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
 		, headers = "Accept=application/json")
-		public void test(@RequestBody(required = false) String testRequest){
-			Map<String, String[]> map = objectMapper.convertValue(testRequest, new TypeReference<Map<String, String[]>>(){});
-			System.out.println("OK");
-		}
-		
-		@GetMapping(value = "/test2", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
-				, headers = "Accept=application/json")
-		 public void test2(@RequestBody(required = false) String testRequest) {
-			TaskRequest taskRequest = objectMapper.convertValue(testRequest, TaskRequest.class);
-			System.out.println("OK2");
+		public ResponseEntity<TaskResponse> searchTasks(@RequestBody(required = false) TaskRequest request) throws JsonMappingException, JsonProcessingException {
+				return taskService.showTasks(request);	
 		}
 		
 		@PostMapping(value = "", produces = MediaType.APPLICATION_JSON_VALUE, consumes = {"application/json"}

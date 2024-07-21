@@ -1,37 +1,34 @@
 package ru.terentyev.TaskManager.entities;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TaskResponse {
 	
-	@JsonProperty("время")
+	@JsonProperty(value = "время", index = 2)
+	@JsonFormat(pattern="dd-MM-yyyy HH:mm")
 	private LocalDateTime timestamp;
 	@JsonProperty("статус")
 	private String status;
-	@JsonProperty("ошибка")
-	private String error;
+	@JsonProperty(value = "ошибка", index = 1)
+	private List<String> errors;
 	private Exception exception;
 	private List<Task> tasks;
 	
-	public TaskResponse() {}
-
+	public TaskResponse(){}
 	
-
-	public TaskResponse(LocalDateTime timestamp, String status, String error, Exception exception, List<Task> tasks) {
-		super();
-		this.timestamp = timestamp;
-		this.status = status;
-		this.error = error;
-		this.exception = exception;
-		this.tasks = tasks;
+	public void addError(String error) {
+		if (errors == null) errors = new ArrayList<>();
+		errors.add(error);
+		status = "400 BAD REQUEST";
+		timestamp = LocalDateTime.now();
 	}
-
-
 
 	public List<Task> getTasks() {
 		return tasks;
@@ -57,12 +54,13 @@ public class TaskResponse {
 		this.status = status;
 	}
 
-	public String getError() {
-		return error;
+
+	public List<String> getErrors() {
+		return errors;
 	}
 
-	public void setError(String error) {
-		this.error = error;
+	public void setErrors(List<String> errors) {
+		this.errors = errors;
 	}
 
 	public Exception getException() {
@@ -72,6 +70,4 @@ public class TaskResponse {
 	public void setException(Exception exception) {
 		this.exception = exception;
 	}
-	
-	
 }

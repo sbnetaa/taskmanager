@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -69,31 +70,29 @@ public class TaskServiceImpl implements TaskService {
 	}
 	
 	public ResponseEntity<TaskResponse> showTasks(TaskRequest request) throws JsonProcessingException {
-		if (request == null) 
-			throw new JsonProcessingException("Передан пустой JSON"){};
 		return new ResponseEntity<>(fillResponse(request), HttpStatus.OK);
 	}
 	
 	public TaskResponse fillResponse(TaskRequest request) throws JsonProcessingException, NumberFormatException{
-		//if (request.getId() != null && request.getId().length == 1) 
-			//return getSingleTask(Long.valueOf(request.getId()[0])
-					//, request.getPage());
+		if (request == null) {
+			TaskResponse response = new TaskResponse();
+			response.setTasks(findAll(null).getContent());
+			return response;
+		}
 		return searchForMeetsAllCriteria(request);
 	}
 	
 	public TaskResponse searchForMeetsAllCriteria(TaskRequest request) {
-		final int PAGE_SIZE = 10;
 		TaskResponse response = new TaskResponse();
 		List<Task> foundTasks = searchByCriteria(request);
 		for (Task task : foundTasks) {
-			int commentsCount = commentService.countByTask(task.getId());
-			task.setCommentsCount(commentsCount + " comments, " + (int) Math.ceil(commentsCount / PAGE_SIZE) + " pages");
+			setTaskCommentsCount(task);
 		}
 		response.setTasks(foundTasks);
 		return response;
 	}
 	
-	// Не уверен, что это стоит делать. Отложил на потом.
+	// Не уверен, что это нужно. Отложил на потом.
 	public TaskResponse searchForMeetsAnyCriteria(TaskRequest request) {
 		return null;
 	}
@@ -101,36 +100,26 @@ public class TaskServiceImpl implements TaskService {
 	public TaskResponse getSingleTask(long id, int page) throws JsonProcessingException {
 			Task task = findById(id);
 			task.setComments(commentService.findByTask(id, page).getContent());
-			//objectMapper.addMixIn(Task.class, SingleTaskMixin.class);
+			setTaskCommentsCount(task);
 			TaskResponse response = new TaskResponse();
 			response.setTasks(List.of(task));
 			return response;
 	}
 	
-	public JsonNode editCommentsRecord(Task task, int page) throws JsonProcessingException {
-		final long PAGE_SIZE = 10;
-		String taskAsJson = objectMapper.writeValueAsString(task);
-		ObjectNode root = (ObjectNode) objectMapper.readTree(taskAsJson);
-		root.set("comments(page " + page + " of " + (int) Math.ceil(task.getComments().size() / PAGE_SIZE) + ")", root.get("comments"));
-		root.remove("comments");
-		return root;
-	}
 	
-	public ResponseEntity<TaskResponse> checkIfAddedTaskAlreadyHasId(TaskRequest request) throws JsonProcessingException {
-		TaskResponse response = new TaskResponse();
-		if (request.getId() != null || request.getAuthor() != null) 
-			response.setError("Поля 'id' и 'author' не должны быть указаны."
-			+ " Они будут сгенерированы автоматически." 
-			+ " Для изменения записи используйте PATCH запрос.");
-		return new ResponseEntity<>(response, HttpStatus.CREATED);
-	}
-	
+	@Transactional(readOnly = false)
 	public Task fillAddedTask(TaskRequest request, PersonDetails pd) {
 		@Valid Task taskToAdd = new Task();
 		taskToAdd.setTitle(request.getTitle()[0]);
 		taskToAdd.setDescription(request.getDescription()[0]);
 		taskToAdd.setAuthor(pd.getPerson());
-		taskToAdd.setExecutor(personDetailsService.findById(request.getExecutor()[0]));
+		taskToAdd.setAuthorName(pd.getPerson().getName());
+		Long[] executorId = request.getExecutor();
+		if (executorId != null && executorId.length != 0) {
+			Person executor = personDetailsService.findById(executorId[0]);
+			taskToAdd.setExecutor(executor);
+			if (executor != null) taskToAdd.setExecutorName(executor.getName());
+		}
 		taskToAdd.setPriority(Task.Priority.valueOf(request.getPriority()[0]));
 		taskToAdd.setStatus(Task.Status.valueOf(request.getStatus()[0]));
 		taskToAdd.setCreatedAt(LocalDateTime.now());
@@ -138,12 +127,44 @@ public class TaskServiceImpl implements TaskService {
 		return taskToAdd;	
 	}
 	
+	@Transactional(readOnly = false)
 	public ResponseEntity<TaskResponse> addTask(TaskRequest request, BindingResult br
-			, PersonDetails pd) throws JsonProcessingException{
+			, PersonDetails pd) throws JsonProcessingException {
+		TaskResponse response = checkValid(request);
+		if (response.getErrors() != null && !response.getErrors().isEmpty()) 
+			return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
 		Task taskToAdd = fillAddedTask(request, pd);
-		ResponseEntity<TaskResponse> response = checkIfAddedTaskAlreadyHasId(request);
-		save(taskToAdd);
-		response.getBody().getTasks().add(taskToAdd);
+		response.setTasks(List.of(save(taskToAdd)));
+		return new ResponseEntity<>(response, HttpStatus.CREATED);
+	}
+	
+	@Transactional(readOnly = false)
+	public TaskResponse checkValid(TaskRequest request) {
+		TaskResponse response = new TaskResponse();
+		Long[] executorIdFromRequest = request.getExecutor();
+		String[] executorNameFromRequest = request.getExecutorName();
+		
+		if (executorIdFromRequest != null && executorNameFromRequest != null) {
+			response.addError("Одновременное использование ключей 'executor' и 'executorName' недопустимо.");
+		}
+		
+		if (executorIdFromRequest != null && executorIdFromRequest.length != 0 && personDetailsService.findById(executorIdFromRequest[0]) == null) 
+				response.addError("Пользователь с ID " + executorIdFromRequest[0] + " не найден.");
+		else if (executorNameFromRequest != null && executorNameFromRequest.length != 0 && personDetailsService.findByUsername(executorNameFromRequest[0]) == null)
+				response.addError("Пользователь с именем " + executorNameFromRequest[0] + " не найден.");
+
+		if (request.getAuthor() != null || request.getAuthorName() != null)
+			response.addError("Указанание автора при добавлении задачи недопустимо.");
+		
+		if (request.getId() != null)
+			response.addError("Указание ID для новой записи недопустимо. ID должен быть сгенерирован автоматически.");
+		
+		if (Task.Status.getStatusesBySubstring(request.getStatus()).size() != 1) 
+			response.addError("Не найден единственный подходящий статус.");
+		
+		if (Task.Priority.getPrioritiesBySubstring(request.getPriority()).size() != 1) 
+			response.addError("Не найден единственный подходящий приоритет.");
+		
 		return response;
 	}
 	
@@ -154,7 +175,7 @@ public class TaskServiceImpl implements TaskService {
 		if (singlePatchRequest.getDescription() != null) task.setDescription(singlePatchRequest.getDescription()[0]);
 		if (singlePatchRequest.getStatus() != null) task.setStatus(Task.Status.valueOf(singlePatchRequest.getStatus()[0]));
 		if (singlePatchRequest.getPriority() != null) task.setPriority(Task.Priority.valueOf(singlePatchRequest.getPriority()[0]));
-		if (singlePatchRequest.getExecutor() != null) task.setAuthor(personDetailsService.findById(singlePatchRequest.getExecutor()[0]));
+		if (singlePatchRequest.getExecutor() != null) task.setExecutor(personDetailsService.findById(singlePatchRequest.getExecutor()[0]));
 		return task;
 	}
 	
@@ -177,12 +198,11 @@ public class TaskServiceImpl implements TaskService {
 		return new ResponseEntity<String>(objectMapper.writeValueAsString(Collections.singletonMap("removedIds", removedIds.toArray())), HttpStatus.OK);
 	}
 	
-	public Page<Task> findAll(int page) {
+	public Page<Task> findAll(Integer page) {
+		if (page == null || page == 0) {
+			return new PageImpl<>(taskRepository.findAll());
+		}
 		return taskRepository.findAll(PageRequest.of(page, 5, Sort.by("id").descending()));
-	}
-
-	public List<Task> findAll() {
-		return taskRepository.findAll();
 	}
 	
 	public Task findById(long id) {
@@ -273,18 +293,19 @@ public class TaskServiceImpl implements TaskService {
 			predicates.add(root.get("priority").in(Task.Priority.getPrioritiesBySubstring(request.getPriority())));
 	
 		if (request.getCreatedBefore() != null)
-			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedBefore()[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedBefore(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
 
 		
 		if (request.getCreatedAfter() != null) 
-			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedAfter()[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedAfter(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
 		
 		if (request.getEditedBefore() != null)
-			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedBefore()[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedBefore(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
 		
 		if (request.getEditedAfter() != null)
-			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedAfter()[0], DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedAfter(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
 	
+		/*
 		if (request.getOrderBy() != null) {
 			cq.orderBy(Arrays.stream(request.getOrderBy()).map(e -> {
 			if (e.contains("DESC")) return cb.desc(root.get(e.replace("DESC", "")));
@@ -293,11 +314,28 @@ public class TaskServiceImpl implements TaskService {
 		} else {
 			cq.orderBy(cb.asc(root.get("id")));
 		}
+		*/
+		String order = request.getOrderBy();
 		
+		if (order != null) {
+			if (order.contains("DESC"))
+				cq.orderBy(cb.desc(root.get(order.replace("DESC", ""))));
+			else
+				cq.orderBy(cb.asc(root.get(order)));
+		} else {
+			cq.orderBy(cb.asc(root.get("id")));
+		}
 		
 		//if (!predicates.isEmpty()) 
 		cq.select(root).where(predicates.toArray(new Predicate[predicates.size()]));
 		TypedQuery<Task> tq = em.createQuery(cq);
 		return tq.getResultList();
+	}
+	
+	public void setTaskCommentsCount(Task task) {
+		final int PAGE_SIZE = 10;
+		final int commentsCount = commentService.countByTask(task.getId());
+		task.setCommentsCount(commentsCount);
+		task.setCommentsPages((int) Math.ceil(commentsCount / PAGE_SIZE));
 	}
 }

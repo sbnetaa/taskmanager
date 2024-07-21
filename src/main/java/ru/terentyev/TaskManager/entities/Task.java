@@ -54,10 +54,12 @@ public class Task {
 	@JoinColumn(name = "author_id", referencedColumnName = "id")
 	@JsonIdentityReference(alwaysAsId = true)
 	private Person author;
+	private String authorName;
 	@ManyToOne(cascade = CascadeType.REMOVE)
 	@JoinColumn(name = "executor_id", referencedColumnName = "id")
 	@JsonIdentityReference(alwaysAsId = true)
 	private Person executor;
+	private String executorName;
 	@NotNull(message = "У задачи должен быть исполнитель")
 	@JsonBackReference
 	private transient long executorId; // Это поле нужно для web контроллера приложения.
@@ -66,7 +68,8 @@ public class Task {
 	//@JsonSerialize(using = MultipleTasksSerializer.class)
 	//@JsonIgnore
 	private List<Comment> comments;
-	private transient String commentsCount;
+	private transient int commentsCount;
+	private transient int commentsPages;
 	@CreatedDate
 	@Column(name = "created_at")
 	@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -174,13 +177,43 @@ public class Task {
 		this.comments = comments;
 	}
 
-	public String getCommentsCount() {
+
+	public String getAuthorName() {
+		return authorName;
+	}
+
+	public void setAuthorName(String authorName) {
+		this.authorName = authorName;
+	}
+
+
+	public String getExecutorName() {
+		return executorName;
+	}
+
+
+	public void setExecutorName(String executorName) {
+		this.executorName = executorName;
+	}
+
+
+	public int getCommentsCount() {
 		return commentsCount;
 	}
 
 
-	public void setCommentsCount(String commentsCount) {
+	public void setCommentsCount(int commentsCount) {
 		this.commentsCount = commentsCount;
+	}
+
+
+	public int getCommentsPages() {
+		return commentsPages;
+	}
+
+
+	public void setCommentsPages(int commentsPages) {
+		this.commentsPages = commentsPages;
 	}
 
 
@@ -189,30 +222,6 @@ public class Task {
 		return "Task [id=" + id + ", title=" + title + ", description=" + description + ", status=" + status
 				+ ", priority=" + priority + ", createdAt=" + createdAt + ", editedAt=" + editedAt + "]";
 	}
-
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(author, comments, createdAt, description, editedAt, executor, id, priority, status, title);
-	}
-
-
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		Task other = (Task) obj;
-		return Objects.equals(author, other.author) && Objects.equals(comments, other.comments)
-				&& Objects.equals(createdAt, other.createdAt) && Objects.equals(description, other.description)
-				&& Objects.equals(editedAt, other.editedAt) && Objects.equals(executor, other.executor)
-				&& Objects.equals(id, other.id) && priority == other.priority && status == other.status
-				&& Objects.equals(title, other.title);
-	}
-
 
 
 
