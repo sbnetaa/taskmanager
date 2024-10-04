@@ -1,6 +1,6 @@
 package ru.terentyev.TaskManager.exceptions;
 
-public class NonGeneratedIdentifierException extends RuntimeException {
+public class NonGeneratedIdentifierException extends CustomException {
 	
 	private String message;
 

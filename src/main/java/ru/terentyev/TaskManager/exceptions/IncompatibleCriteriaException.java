@@ -1,23 +1,13 @@
 package ru.terentyev.TaskManager.exceptions;
 
-public class IncompatibleCriteriaException extends RuntimeException {
+import lombok.Getter;
+import lombok.Setter;
 
-	private long objectId;
+@Getter
+@Setter
+public class IncompatibleCriteriaException extends CustomException {
 
-	public IncompatibleCriteriaException(long objectId) {
-		super("При GET запросе нельзя одновременно "
-				+ "указывать ID с другими критериями для поиска. Была выбрана запись с указанным ID.");
-		this.objectId = objectId;
+	public IncompatibleCriteriaException(String message) {
+		super(message);
 	}
-
-	public long getObjectId() {
-		return objectId;
-	}
-
-	public void setObjectId(long objectId) {
-		this.objectId = objectId;
-	}
-
-
-
 }

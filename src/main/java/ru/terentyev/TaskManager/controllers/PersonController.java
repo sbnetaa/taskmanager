@@ -16,7 +16,7 @@ import ru.terentyev.TaskManager.services.TaskService;
 
 @RequestMapping("/people")
 @Controller
-public class PersonController {
+public class PersonController extends AbstractController {
 
 	private PersonService personService;
 	private TaskService taskService;

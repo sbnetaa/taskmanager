@@ -25,7 +25,7 @@ import ru.terentyev.TaskManager.services.TaskService;
 
 @Controller
 @RequestMapping("/tasks")
-public class TaskController {
+public class TaskController extends AbstractController {
 
 	private TaskService taskService;
 	private CommentService commentService;
@@ -43,7 +43,7 @@ public class TaskController {
 
 	@GetMapping("/{page}")
 	public String showTasks(@PathVariable int page, Model model, @AuthenticationPrincipal PersonDetails pd){
-		model.addAttribute("tasks", taskService.findAll(page));
+		model.addAttribute("tasks", taskService.findAll(page, "id"));
 		model.addAttribute("currentPage", page);
 		if (pd != null)	model.addAttribute("personId", pd.getPerson().getId());
 		return "tasks";

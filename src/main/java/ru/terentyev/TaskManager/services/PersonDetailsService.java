@@ -48,6 +48,17 @@ public class PersonDetailsService implements UserDetailsService {
         return personRepository.save(person);
     }
     
+    @Transactional(readOnly = false)
+    public Person registerNewUserAccountRest(Person newPerson) {
+    	newPerson.setPassword(bCryptPasswordEncoder.encode(newPerson.getPassword()));
+    	newPerson.setId(null);
+    	newPerson.setExecutableTasks(null);
+    	newPerson.setComments(null);
+    	newPerson.setCreatedTasks(null);
+    	newPerson.setRegistrationDate(LocalDateTime.now());
+    	return personRepository.save(newPerson);
+    }
+    
     public Person findById(Long Id) {
     	Optional<Person> oPerson = personRepository.findById(Id); 
         return oPerson.orElse(null);    
@@ -56,7 +67,11 @@ public class PersonDetailsService implements UserDetailsService {
     public Person findByUsername(String name) {
     	Optional<Person> oPerson = personRepository.findByName(name);
     	return oPerson.orElse(null);
-    	
+    }
+    
+    public Person findByEmail(String email) {
+       	Optional<Person> oPerson = personRepository.findByEmail(email);
+    	return oPerson.orElse(null);
     }
     
     public List<Person> findAll(){

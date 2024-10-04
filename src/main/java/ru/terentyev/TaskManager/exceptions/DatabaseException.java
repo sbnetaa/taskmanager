@@ -1,6 +1,6 @@
 package ru.terentyev.TaskManager.exceptions;
 
-public class DatabaseException extends RuntimeException {
+public class DatabaseException extends CustomException {
 
 	private static String message = "Ошибка обращения к базе данных";
 	

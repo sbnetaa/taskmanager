@@ -1,6 +1,6 @@
 package ru.terentyev.TaskManager.exceptions;
 
-public class MismatchIdentifierException extends RuntimeException {
+public class MismatchIdentifierException extends CustomException {
 
 	/**
 	 * 

@@ -6,7 +6,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -20,14 +22,9 @@ import org.springframework.validation.BindingResult;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Persistence;
-import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -35,11 +32,17 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import jakarta.validation.Valid;
+import ru.terentyev.TaskManager.entities.Comment;
 import ru.terentyev.TaskManager.entities.Person;
 import ru.terentyev.TaskManager.entities.Task;
+import ru.terentyev.TaskManager.entities.Task.Status;
 import ru.terentyev.TaskManager.entities.TaskRequest;
 import ru.terentyev.TaskManager.entities.TaskResponse;
+import ru.terentyev.TaskManager.exceptions.AlienTaskException;
+import ru.terentyev.TaskManager.exceptions.IncompatibleCriteriaException;
 import ru.terentyev.TaskManager.exceptions.PersonNotFoundException;
+import ru.terentyev.TaskManager.exceptions.PriorityNotFoundException;
+import ru.terentyev.TaskManager.exceptions.StatusNotFoundException;
 import ru.terentyev.TaskManager.exceptions.TaskNotFoundException;
 import ru.terentyev.TaskManager.repositories.PersonRepository;
 import ru.terentyev.TaskManager.repositories.TaskRepository;
@@ -53,42 +56,57 @@ public class TaskServiceImpl implements TaskService {
 	private PersonRepository personRepository;
 	private CommentService commentService;
 	private PersonDetailsService personDetailsService;
-	private ObjectMapper objectMapper;
-	
-	@PersistenceContext
 	private EntityManager entityManager;
+	private KafkaProducerService kafkaProducerService;
+	
 
 	@Autowired
 	public TaskServiceImpl(TaskRepository taskRepository, PersonRepository personRepository
-			, CommentService commentService, PersonDetailsService personDetailsService, ObjectMapper objectMapper) {
+			, CommentService commentService, PersonDetailsService personDetailsService
+			, EntityManager entityManager, KafkaProducerService kafkaProducerService) {
 		super();
 		this.taskRepository = taskRepository;
 		this.personRepository = personRepository;
 		this.commentService = commentService;
 		this.personDetailsService = personDetailsService;
-		this.objectMapper = objectMapper;
+		this.entityManager = entityManager;
+		this.kafkaProducerService = kafkaProducerService;
 	}
 	
-	public ResponseEntity<TaskResponse> showTasks(TaskRequest request) throws JsonProcessingException {
-		return new ResponseEntity<>(fillResponse(request), HttpStatus.OK);
+	@Override
+	public TaskResponse[] showTasks(TaskRequest request) throws JsonProcessingException {
+		List<Task> tasksFound = null;
+		List<TaskResponse> responses = new ArrayList<>();
+		if (request == null) 
+			tasksFound = taskRepository.findAll();
+		else
+			tasksFound = searchByCriteria(request);
+		for (Task task : tasksFound)
+			responses.add(fillTaskResponse(task, commentService.countByTask(task.getId())));
+		if (responses.size() == 1) 
+			responses.get(0).setComments(commentService.findByTask(responses.get(0).getId(), 0).getContent());
+		return responses.toArray(new TaskResponse[0]);
 	}
 	
-	public TaskResponse fillResponse(TaskRequest request) throws JsonProcessingException, NumberFormatException{
-		if (request == null) {
-			TaskResponse response = new TaskResponse();
-			response.setTasks(findAll(null).getContent());
-			return response;
-		}
-		return searchForMeetsAllCriteria(request);
+	public TaskResponse[] showAllTasks(Integer page, String sortBy) throws JsonProcessingException, NumberFormatException {
+		List<TaskResponse> responses = new ArrayList<>();
+		for (Task task : findAll(page, sortBy).getContent())
+			responses.add(fillTaskResponse(task, commentService.countByTask(task.getId())));
+		return responses.toArray(new TaskResponse[0]);
 	}
-	
-	public TaskResponse searchForMeetsAllCriteria(TaskRequest request) {
+
+	public TaskResponse fillTaskResponse(Task task, int commentsCount) throws JsonProcessingException, NumberFormatException{
 		TaskResponse response = new TaskResponse();
-		List<Task> foundTasks = searchByCriteria(request);
-		for (Task task : foundTasks) {
-			setTaskCommentsCount(task);
-		}
-		response.setTasks(foundTasks);
+		response.setId(task.getId());
+		response.setTitle(task.getTitle());
+		response.setDescription(task.getDescription());
+		response.setStatus(task.getStatus().name());
+		response.setPriority(task.getPriority().name());
+		response.setAuthorId(task.getAuthor().getId());
+		response.setExecutorId(task.getExecutor().getId());
+		response.setCreatedAt(task.getCreatedAt());
+		response.setEditedAt(task.getEditedAt());
+		putCommentsCount(response, commentsCount);
 		return response;
 	}
 	
@@ -97,118 +115,110 @@ public class TaskServiceImpl implements TaskService {
 		return null;
 	}
 	
+	@Override
 	public TaskResponse getSingleTask(long id, int page) throws JsonProcessingException {
-			Task task = findById(id);
-			task.setComments(commentService.findByTask(id, page).getContent());
-			setTaskCommentsCount(task);
-			TaskResponse response = new TaskResponse();
-			response.setTasks(List.of(task));
-			return response;
-	}
-	
-	
-	@Transactional(readOnly = false)
-	public Task fillAddedTask(TaskRequest request, PersonDetails pd) {
-		@Valid Task taskToAdd = new Task();
-		taskToAdd.setTitle(request.getTitle()[0]);
-		taskToAdd.setDescription(request.getDescription()[0]);
-		taskToAdd.setAuthor(pd.getPerson());
-		taskToAdd.setAuthorName(pd.getPerson().getName());
-		Long[] executorId = request.getExecutor();
-		if (executorId != null && executorId.length != 0) {
-			Person executor = personDetailsService.findById(executorId[0]);
-			taskToAdd.setExecutor(executor);
-			if (executor != null) taskToAdd.setExecutorName(executor.getName());
-		}
-		taskToAdd.setPriority(Task.Priority.valueOf(request.getPriority()[0]));
-		taskToAdd.setStatus(Task.Status.valueOf(request.getStatus()[0]));
-		taskToAdd.setCreatedAt(LocalDateTime.now());
-		taskToAdd.setEditedAt(LocalDateTime.now());
-		return taskToAdd;	
-	}
-	
-	@Transactional(readOnly = false)
-	public ResponseEntity<TaskResponse> addTask(TaskRequest request, BindingResult br
-			, PersonDetails pd) throws JsonProcessingException {
-		TaskResponse response = checkValid(request);
-		if (response.getErrors() != null && !response.getErrors().isEmpty()) 
-			return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-		Task taskToAdd = fillAddedTask(request, pd);
-		response.setTasks(List.of(save(taskToAdd)));
-		return new ResponseEntity<>(response, HttpStatus.CREATED);
-	}
-	
-	@Transactional(readOnly = false)
-	public TaskResponse checkValid(TaskRequest request) {
-		TaskResponse response = new TaskResponse();
-		Long[] executorIdFromRequest = request.getExecutor();
-		String[] executorNameFromRequest = request.getExecutorName();
-		
-		if (executorIdFromRequest != null && executorNameFromRequest != null) {
-			response.addError("Одновременное использование ключей 'executor' и 'executorName' недопустимо.");
-		}
-		
-		if (executorIdFromRequest != null && executorIdFromRequest.length != 0 && personDetailsService.findById(executorIdFromRequest[0]) == null) 
-				response.addError("Пользователь с ID " + executorIdFromRequest[0] + " не найден.");
-		else if (executorNameFromRequest != null && executorNameFromRequest.length != 0 && personDetailsService.findByUsername(executorNameFromRequest[0]) == null)
-				response.addError("Пользователь с именем " + executorNameFromRequest[0] + " не найден.");
-
-		if (request.getAuthor() != null || request.getAuthorName() != null)
-			response.addError("Указанание автора при добавлении задачи недопустимо.");
-		
-		if (request.getId() != null)
-			response.addError("Указание ID для новой записи недопустимо. ID должен быть сгенерирован автоматически.");
-		
-		if (Task.Status.getStatusesBySubstring(request.getStatus()).size() != 1) 
-			response.addError("Не найден единственный подходящий статус.");
-		
-		if (Task.Priority.getPrioritiesBySubstring(request.getPriority()).size() != 1) 
-			response.addError("Не найден единственный подходящий приоритет.");
-		
+		List<Comment> comments = commentService.findByTask(id, 0).getContent();
+		TaskResponse response = fillTaskResponse(findById(id), comments.size());
+		response.setComments(comments);
+		putCommentsCount(response, comments.size());
 		return response;
 	}
 	
-	
-	public Task fillPatchingFields(TaskRequest singlePatchRequest) {
-		Task task = findById(singlePatchRequest.getId()[0]);
-		if (singlePatchRequest.getTitle() != null) task.setTitle(singlePatchRequest.getTitle()[0]);
-		if (singlePatchRequest.getDescription() != null) task.setDescription(singlePatchRequest.getDescription()[0]);
-		if (singlePatchRequest.getStatus() != null) task.setStatus(Task.Status.valueOf(singlePatchRequest.getStatus()[0]));
-		if (singlePatchRequest.getPriority() != null) task.setPriority(Task.Priority.valueOf(singlePatchRequest.getPriority()[0]));
-		if (singlePatchRequest.getExecutor() != null) task.setExecutor(personDetailsService.findById(singlePatchRequest.getExecutor()[0]));
-		return task;
+	public void putCommentsCount(TaskResponse response, int commentsCount) {
+		response.setCommentsCount(commentsCount);
+		final int PAGE_SIZE = 10;
+		response.setCommentsPages((int) Math.ceil(commentsCount / PAGE_SIZE));
 	}
 	
-	public ResponseEntity<TaskResponse> updateTask(TaskRequest[] request) throws JsonMappingException, JsonProcessingException{
-		TaskResponse response = new TaskResponse();
-		for (TaskRequest singlePatchRequest : request) {
-			Task task = fillPatchingFields(singlePatchRequest);
-			save(task);
-			response.getTasks().add(task);
-		}
-		return new ResponseEntity<>(response, HttpStatus.OK);
+	@Transactional(readOnly = false)
+	public Task fillTask(TaskRequest request, Task task, PersonDetails pd) {
+		if (request.getTitle() != null) task.setTitle(request.getTitle()[0]);
+		if (request.getDescription() != null) task.setDescription(request.getDescription()[0]);
+		Status status = Task.Status.getStatusBySubstring(request.getStatus()[0]);
+		if (request.getStatus() != null) task.setStatus(status);
+		if (request.getPriority() != null) task.setPriority(Task.Priority.getPriorityBySubstring(request.getPriority()[0]));
+		task.setAuthor(pd.getPerson());
+		if (request.getExecutor() != null)
+			task.setExecutor(personDetailsService.findById(request.getExecutor()[0]));
+		else if (task.getExecutor() == null)
+			task.setExecutor(pd.getPerson());
+		LocalDateTime now = LocalDateTime.now();
+		if (task.getCreatedAt() == null) task.setCreatedAt(now);
+		task.setEditedAt(now);
+		if (status != task.getStatus()) task.setStatusChangedAt(now);
+
+		return task;	
 	}
 	
-	public ResponseEntity<String> deleteTask(TaskRequest request) throws JsonProcessingException{
-		List<Long> removedIds = new ArrayList<>();
-		for (long id : request.getId()) {
-			deleteById(id);
-			removedIds.add(id);			
-		}
-		return new ResponseEntity<String>(objectMapper.writeValueAsString(Collections.singletonMap("removedIds", removedIds.toArray())), HttpStatus.OK);
+	@Override
+	@Transactional(readOnly = false)
+	public TaskResponse addTask(TaskRequest request, PersonDetails pd) throws JsonProcessingException {
+		checkValid(request);	
+		Task taskToAdd = save(fillTask(request, new Task(), pd));
+		//TaskRequest requestForStatistics = new TaskRequest();
+		request.setTaskBeforeChanges(taskToAdd);			
+		kafkaProducerService.reportAddingTask(request);
+		return fillTaskResponse(taskToAdd, 0);
 	}
 	
-	public Page<Task> findAll(Integer page) {
+	@Transactional(readOnly = false)
+	public void checkValid(TaskRequest request) {
+		Long[] executorIdFromRequest = request.getExecutor();
+		String[] executorNameFromRequest = request.getExecutorName();
+		
+		if (executorIdFromRequest != null && executorNameFromRequest != null) 
+			throw new IncompatibleCriteriaException("Одновременное использование ключей 'executor' и 'executorName' недопустимо.");
+		
+		if ((executorIdFromRequest != null && executorIdFromRequest.length != 0
+				&& personDetailsService.findById(executorIdFromRequest[0]) == null) 
+				|| (executorNameFromRequest != null && executorNameFromRequest.length != 0 
+				&& personDetailsService.findByUsername(executorNameFromRequest[0]) == null)) 
+				throw new PersonNotFoundException();
+		
+		if (request.getStatus() != null && Task.Status.getStatusesBySubstring(request.getStatus()).size() != 1) 
+			throw new StatusNotFoundException();
+		
+		if (request.getPriority() != null && Task.Priority.getPrioritiesBySubstring(request.getPriority()).size() != 1) 
+			throw new PriorityNotFoundException();
+	}
+	
+	@Override
+	public TaskResponse updateTask(Long id, TaskRequest request, PersonDetails pd) throws JsonMappingException, JsonProcessingException {
+		checkValid(request);
+		Task task = findById(id);
+		if (task == null) throw new TaskNotFoundException();
+		request.setTaskBeforeChanges(task);
+		task = save(fillTask(request, task, pd));
+		kafkaProducerService.reportUpdatingTask(request);
+		return fillTaskResponse(task, commentService.countByTask(id));
+	}
+	
+	@Override
+	public void deleteTask(Long id, PersonDetails pd) throws JsonProcessingException {	
+		Task task = findById(id);
+		if (task == null) 
+			throw new TaskNotFoundException();
+		if (task.getAuthor().getId() != pd.getPerson().getId()) 
+			throw new AlienTaskException(task.getId());
+		TaskRequest request = new TaskRequest();
+		request.setTaskBeforeChanges(task);
+		kafkaProducerService.reportDeletingTask(request);
+	}
+	
+	@Override
+	public Page<Task> findAll(Integer page, String sortBy) {
 		if (page == null || page == 0) {
 			return new PageImpl<>(taskRepository.findAll());
 		}
-		return taskRepository.findAll(PageRequest.of(page, 5, Sort.by("id").descending()));
+		return taskRepository.findAll(PageRequest.of(page, 10, Sort.by(sortBy == null ? "id" : sortBy)));
 	}
 	
+	@Override
 	public Task findById(long id) {
 		return taskRepository.findById(id).orElseThrow(() -> new TaskNotFoundException());
 	}
 	
+	@Override
 	@Transactional(readOnly = false)
 	public Task save(Task task) {
 		if (task.getCreatedAt() == null) task.setCreatedAt(LocalDateTime.now());
@@ -219,29 +229,31 @@ public class TaskServiceImpl implements TaskService {
 		return taskRepository.save(task);
 	}
 	
+	@Override
 	@Transactional(readOnly = false)
 	public void deleteById(long id) {
 		taskRepository.deleteById(id);
 	}
 	
+	@Override
 	public Page<Task> findByExecutor(long id, int page){
 		return taskRepository.findByExecutor(personRepository.findById(id)
 				.orElseThrow(() -> new PersonNotFoundException()), PageRequest.of(page, 5));		
 	}
 	
+	@Override
 	public Page<Task> findByAuthor(long id, int page){
 		return taskRepository.findByAuthor(personRepository.findById(id)
 				.orElseThrow(() -> new PersonNotFoundException()), PageRequest.of(page, 5));
 	}
 	
+	@Override
 	public Page<Task> findByIdIn(List<Long> ids, int page){
 		return taskRepository.findByIdIn(ids, PageRequest.of(page, 5));
 	}
 	
 	public List<Task> searchByCriteria(TaskRequest request) {
-		EntityManagerFactory emf = Persistence.createEntityManagerFactory("myPersistence");
-		EntityManager em = emf.createEntityManager();
-		CriteriaBuilder cb = em.getCriteriaBuilder();
+		CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 		CriteriaQuery<Task> cq = cb.createQuery(Task.class);
 		Root<Task> root = cq.from(Task.class);
 		List<Predicate> predicates = new ArrayList<>();
@@ -263,7 +275,7 @@ public class TaskServiceImpl implements TaskService {
 			List<Predicate> subPredicates = new ArrayList<>();
 			for (String nameLike : request.getExecutorName()) subPredicates.add(cb.like(cb.lower(rootPerson.get("name")), "%" + nameLike.toLowerCase() + "%"));
 			predicates.add(cb.and(subPredicates.toArray(new Predicate[0])));
-			} 
+		} 
 		
 		if (request.getAuthor() != null) {
 			sq.select(rootPerson).where(rootPerson.get("id").in(request.getAuthor()));
@@ -293,28 +305,18 @@ public class TaskServiceImpl implements TaskService {
 			predicates.add(root.get("priority").in(Task.Priority.getPrioritiesBySubstring(request.getPriority())));
 	
 		if (request.getCreatedBefore() != null)
-			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedBefore(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedBefore(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss"))));
 
 		
 		if (request.getCreatedAfter() != null) 
-			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedAfter(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getCreatedAfter(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss"))));
 		
 		if (request.getEditedBefore() != null)
-			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedBefore(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+			predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedBefore(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss"))));
 		
 		if (request.getEditedAfter() != null)
-			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedAfter(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm"))));
+			predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), LocalDateTime.parse(request.getEditedAfter(), DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss"))));
 	
-		/*
-		if (request.getOrderBy() != null) {
-			cq.orderBy(Arrays.stream(request.getOrderBy()).map(e -> {
-			if (e.contains("DESC")) return cb.desc(root.get(e.replace("DESC", "")));
-			else return cb.asc(root.get(e));
-			}).toList());
-		} else {
-			cq.orderBy(cb.asc(root.get("id")));
-		}
-		*/
 		String order = request.getOrderBy();
 		
 		if (order != null) {
@@ -328,14 +330,7 @@ public class TaskServiceImpl implements TaskService {
 		
 		//if (!predicates.isEmpty()) 
 		cq.select(root).where(predicates.toArray(new Predicate[predicates.size()]));
-		TypedQuery<Task> tq = em.createQuery(cq);
+		TypedQuery<Task> tq = entityManager.createQuery(cq);
 		return tq.getResultList();
-	}
-	
-	public void setTaskCommentsCount(Task task) {
-		final int PAGE_SIZE = 10;
-		final int commentsCount = commentService.countByTask(task.getId());
-		task.setCommentsCount(commentsCount);
-		task.setCommentsPages((int) Math.ceil(commentsCount / PAGE_SIZE));
-	}
+	}	
 }

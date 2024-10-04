@@ -18,10 +18,8 @@ import ru.terentyev.TaskManager.services.PersonDetailsService;
 @Controller
 @RequestMapping("/auth")
 public class AuthController {
-
     
     private PersonDetailsService personDetailsService;
-    
     
     @Autowired
     public AuthController(PersonDetailsService personDetailsService) {

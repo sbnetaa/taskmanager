@@ -25,10 +25,11 @@ import ru.terentyev.TaskManager.security.PersonDetails;
 import ru.terentyev.TaskManager.services.TaskService;
 
 @RestController
-@RequestMapping("/rest/tasks")
+@RequestMapping(value = "/api/v1/tasks", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
+, headers = "Accept=application/json")
 public class TaskRestController {
 
-	// TODO OncePerRequestFilter
+			// TODO OncePerRequestFilter (MediaType.APPLICATION_JSON_VALUE?)
 	// TODO Integer to Long
 	// TODO DatabaseException vs TaskNotFoundException vs ObjectNotFoundException
 			// TODO Paging?
@@ -49,7 +50,7 @@ public class TaskRestController {
 			// TODO handler DatabaseException
 			// TODO patch id of updated tasks
 			// TODO common pretty printer
-	// TODO check wrong createdAt (==editedAt)
+			// TODO check wrong createdAt (==editedAt)
 			// TODO remove comments global
 	// TODO COMMENTS
 	// TODO ? Long.valueOf("authorId") ?
@@ -64,13 +65,18 @@ public class TaskRestController {
 	
 	// TODO truncatedTo WEB
 	
-	// TODO print executorId and executorName in response (and author)
-	// TODO при добавлении задачи executor не найден
-	// TODO response commentsCount null (0)
-	// TODO регистрация через rest
+			// TODO print executorId and executorName in response (and author)
+			// TODO при добавлении задачи executor не найден
+			// TODO response commentsCount null (0)
+			// TODO регистрация через rest
+	// TODO ? .csrf(csrf -> csrf.ignoringRequestMatchers
+			// TODO createdAt editedAt seconds
+	// TODO adding task: priority HI status AWA
 	
+	// TODO task validation
 	
 	private TaskService taskService;
+	
 	
 	@Autowired
 	public TaskRestController(TaskService taskService) {
@@ -80,41 +86,35 @@ public class TaskRestController {
 	
 	public TaskRestController() {}
 	
-		@GetMapping(value = "", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
-			, headers = "Accept=application/json")
-		public ResponseEntity<TaskResponse> showAllTasks(@RequestParam(required = false) Integer page, @RequestBody(required = false) String jsonInput) throws JsonMappingException, JsonProcessingException {
-			TaskResponse response = new TaskResponse();
-			response.setTasks(taskService.findAll(page).getContent());
-			return new ResponseEntity<>(response, HttpStatus.OK);
+		@GetMapping({"", "/{id}"})
+		public ResponseEntity<TaskResponse[]> showAllTasks(@PathVariable(required=false) Long id
+				, @RequestParam(required = false, defaultValue = "0") Integer page, @RequestParam(required = false) String sortBy
+				, @RequestBody(required = false) String jsonInput) throws JsonMappingException, JsonProcessingException {
+			if (id == null) return new ResponseEntity<>(taskService.showAllTasks(page, sortBy), HttpStatus.OK);
+			return new ResponseEntity<>(new TaskResponse[]{taskService.getSingleTask(id, page)}, HttpStatus.OK);
 		}
 	
-		@GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
-		, headers = "Accept=application/json")
-		public ResponseEntity<TaskResponse> showTasks(@PathVariable(required=false) Long id, @RequestParam(required = false, defaultValue = "0") int page, @RequestBody(required = false) String jsonInput) throws JsonMappingException, JsonProcessingException {
-			if (id == null) return taskService.showTasks(null);
-				return new ResponseEntity<TaskResponse>(taskService.getSingleTask(id, page), HttpStatus.OK);
+		
+		@PostMapping("/search")
+		public ResponseEntity<TaskResponse[]> searchTasks(@RequestBody(required = false) TaskRequest request) throws JsonMappingException, JsonProcessingException {
+				return new ResponseEntity<>(taskService.showTasks(request), HttpStatus.OK);	
 		}
 		
-		@PostMapping(value = "/search", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE
-		, headers = "Accept=application/json")
-		public ResponseEntity<TaskResponse> searchTasks(@RequestBody(required = false) TaskRequest request) throws JsonMappingException, JsonProcessingException {
-				return taskService.showTasks(request);	
-		}
-		
-		@PostMapping(value = "", produces = MediaType.APPLICATION_JSON_VALUE, consumes = {"application/json"}
-		, headers = "Accept=application/json")
+		@PostMapping
 		public ResponseEntity<TaskResponse> addTask(@RequestBody TaskRequest request, BindingResult br
 				, @AuthenticationPrincipal PersonDetails pd) throws JsonProcessingException {
-			return taskService.addTask(request, br, pd);
+			return new ResponseEntity<>(taskService.addTask(request, pd), HttpStatus.CREATED);
 		}
 		
-		@PatchMapping(value = "", consumes = "application/json", headers = "Accept=application/json")
-		public ResponseEntity<TaskResponse> updateTask(@RequestBody TaskRequest[] request) throws JsonProcessingException {
-			return taskService.updateTask(request);			
+		@PatchMapping("/{id}")
+		public ResponseEntity<TaskResponse> updateTask(@PathVariable Long id, @RequestBody TaskRequest request, @AuthenticationPrincipal PersonDetails pd) throws JsonProcessingException {
+			return new ResponseEntity<>(taskService.updateTask(id, request, pd), HttpStatus.OK);			
 		}
 				
-		@DeleteMapping(value = "", consumes = "application/json", headers = "Accept=application/json")
-		public ResponseEntity<String> deleteTask(@RequestBody TaskRequest request) throws JsonProcessingException {
-			return taskService.deleteTask(request);
+		@DeleteMapping("/{id}")
+		public ResponseEntity<Void> deleteTask(@PathVariable Long id, @AuthenticationPrincipal PersonDetails pd) throws JsonProcessingException {
+			taskService.deleteTask(id, pd);
+			return ResponseEntity.noContent().build();
 		}
+
 }

@@ -1,6 +1,6 @@
 package ru.terentyev.TaskManager.exceptions;
 
-public class TaskNotFoundException extends RuntimeException {
+public class TaskNotFoundException extends CustomException {
 
 	private static String message = "Задача с таким ID не найдена";
 

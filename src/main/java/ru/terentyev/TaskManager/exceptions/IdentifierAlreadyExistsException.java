@@ -1,6 +1,6 @@
 package ru.terentyev.TaskManager.exceptions;
 
-public class IdentifierAlreadyExistsException extends RuntimeException {
+public class IdentifierAlreadyExistsException extends CustomException {
 	
 	/**
 	 * 
